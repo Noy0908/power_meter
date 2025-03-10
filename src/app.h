@@ -35,5 +35,4 @@ extern void uart_send_data(uint8_t *buffer, uint16_t length);
 extern int uart_handler_init(void);
 
 
-
 #endif /* _APP_H */

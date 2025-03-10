@@ -201,7 +201,7 @@ error_exit:
 
 
 
-
-K_THREAD_DEFINE(tcp_thread, TCP_THREAD_STACK_SIZE,
-		tcp_thread_fn, NULL, NULL, NULL,
-		TCP_THREAD_PRIORITY, 0, 0);
+/** TCP thread used to transparent transport data between tcp server and uart */
+// K_THREAD_DEFINE(tcp_thread, TCP_THREAD_STACK_SIZE,
+// 		tcp_thread_fn, NULL, NULL, NULL,
+// 		TCP_THREAD_PRIORITY, 0, 0);

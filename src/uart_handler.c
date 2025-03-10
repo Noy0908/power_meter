@@ -16,6 +16,7 @@
 LOG_MODULE_REGISTER(uart_handler, CONFIG_TCP_LOG_LEVEL);
 #include "slip/slip.h"
 #include "app.h"
+#include "upgrade_app.h"
 
 
 #define UART_RX_TIMEOUT_US					50000
@@ -28,7 +29,7 @@ LOG_MODULE_REGISTER(uart_handler, CONFIG_TCP_LOG_LEVEL);
 #define UART_SLAB_BLOCK_COUNT 				3
 
 
-const struct device *const uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart2));
+const struct device *const uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
 uint32_t uart_baudrate;
 
 static struct k_work_delayable rx_process_work;
@@ -220,6 +221,20 @@ void uart_send_data(uint8_t *buffer, uint16_t length)
 }
 
 
+void handle_uart_data(uint8_t *buffer, uint16_t length)
+{
+	if(strstr(buffer, "download"))
+	{
+		apply_state(CONNECTED);
+	}
+	else if(strstr(buffer, "download"))
+	{
+		LOG_ERR("Received data is not correct, drop it!\n");
+	}
+}
+
+
+
 static void rx_process(struct k_work *work)
 {
 	uint16_t i = 0;
@@ -228,7 +243,7 @@ static void rx_process(struct k_work *work)
 
 	while (k_msgq_get(&rx_event_queue, &rx_event, K_NO_WAIT) == 0) 
 	{
-		// LOG_INF("Uart received:[%d]:%s\n",rx_event.len, rx_event.buf);
+		LOG_INF("Uart received:[%d]:%s\n",rx_event.len, rx_event.buf);
 		for(i=0; i<rx_event.len; i++)
 		{
 			ret_code = slip_decode_add_byte(&m_slip, rx_event.buf[i]);
@@ -236,8 +251,8 @@ static void rx_process(struct k_work *work)
 			{
 			case NRF_SUCCESS:
 				/** decode uart data success, now put it to message queue */
-				on_packet_received(m_slip.p_buffer, m_slip.current_index);
-				// uart_send_data(m_slip.p_buffer, m_slip.current_index);		//uart send back the received data with SLIP protocal, just for test
+				// on_packet_received(m_slip.p_buffer, m_slip.current_index);
+				handle_uart_data(m_slip.p_buffer, m_slip.current_index);		//handle the received data
 				
 				memset(m_slip.p_buffer, 0, m_slip.buffer_len);
 				m_slip.current_index = 0;
@@ -443,6 +458,8 @@ int uart_handler_init(void)
 	k_work_init_delayable(&rx_process_work, rx_process);
 
 	k_sem_give(&tx_done_sem);
+
+	LOG_INF("UART init!\n");
 
 	return 0;
 }
