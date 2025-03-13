@@ -15,10 +15,10 @@ config FTP_DOWNLOAD_HOST
 	  of this configuration should be 'ftp://foo.bar/update.bin'
 
 config FTP_DOWNLOAD_PORT
-	int "FTP server data port"
-	default 20
+	int "FTP server control port"
+	default 21
 	help
-	  server port for the ftp data communication. Default is 20 when active mode.
+	  server port for the ftp control communication. Default is 21 .
 	  if the server is using a different port in passive mode, please specify it here.  
 
 config FTP_DOWNLOAD_USER

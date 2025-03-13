@@ -83,6 +83,10 @@ static void lte_handler(const struct lte_lc_evt *const evt)
 	case LTE_LC_EVT_RRC_UPDATE:
 		printk("RRC mode: %s\n",
 		       evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ? "Connected" : "Idle\n");
+		if(LTE_LC_RRC_MODE_IDLE == evt->rrc_mode)
+		{
+			apply_state(UPDATE_PENDING);
+		}
 		break;
 	case LTE_LC_EVT_CELL_UPDATE:
 		printk("LTE cell changed: Cell ID: %d, Tracking area: %d\n",

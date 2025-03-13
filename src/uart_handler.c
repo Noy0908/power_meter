@@ -225,11 +225,13 @@ void handle_uart_data(uint8_t *buffer, uint16_t length)
 {
 	if(strstr(buffer, "download"))
 	{
-		apply_state(CONNECTED);
+		// apply_state(CONNECTED);
+		apply_state(UPDATE_DOWNLOAD);
 	}
-	else if(strstr(buffer, "download"))
+	else if(strstr(buffer, "connect"))
 	{
-		LOG_ERR("Received data is not correct, drop it!\n");
+		apply_state(CONNECTED);
+		// LOG_ERR("Received data is not correct, drop it!\n");
 	}
 }
 
@@ -243,7 +245,6 @@ static void rx_process(struct k_work *work)
 
 	while (k_msgq_get(&rx_event_queue, &rx_event, K_NO_WAIT) == 0) 
 	{
-		LOG_INF("Uart received:[%d]:%s\n",rx_event.len, rx_event.buf);
 		for(i=0; i<rx_event.len; i++)
 		{
 			ret_code = slip_decode_add_byte(&m_slip, rx_event.buf[i]);
@@ -252,6 +253,7 @@ static void rx_process(struct k_work *work)
 			case NRF_SUCCESS:
 				/** decode uart data success, now put it to message queue */
 				// on_packet_received(m_slip.p_buffer, m_slip.current_index);
+				LOG_INF("Uart received:[%d]:%s\n",m_slip.current_index, m_slip.p_buffer);
 				handle_uart_data(m_slip.p_buffer, m_slip.current_index);		//handle the received data
 				
 				memset(m_slip.p_buffer, 0, m_slip.buffer_len);

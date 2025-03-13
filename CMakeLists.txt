@@ -5,6 +5,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(tcp_sample)
 
 add_subdirectory(src/slip)
+add_subdirectory(src/dfu_lib)
 
 FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
