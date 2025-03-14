@@ -10,7 +10,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/dfu/mcuboot.h>
 #include <zephyr/sys/reboot.h>
-// #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(tcp_sample,CONFIG_TCP_LOG_LEVEL);
 
@@ -18,10 +17,7 @@ LOG_MODULE_DECLARE(tcp_sample,CONFIG_TCP_LOG_LEVEL);
 #include "dfu_lib/nrf_dfu_flash.h"
 
 
-// RING_BUF_DECLARE(ftp_data_buf, SLM_MAX_MESSAGE_SIZE);
-
 struct ftp_server_t server;
-
 
 static struct k_work fota_work;
 
@@ -29,8 +25,21 @@ static enum fota_state state = IDLE;
 
 bool download_finished = false;
 
-static uint32_t total_length = 0;
+static uint32_t file_length = 0;	//fetch length of file
+static uint32_t total_length = 0;	//received total length of file
 
+
+static int fetch_file_length(const uint8_t *msg)
+{
+    int bytes;
+    
+    if (sscanf(msg, "%*[^()](%d bytes)", &bytes) == 1) {
+        LOG_INF("Fetch file length: %d\n", bytes);
+    } else {
+        LOG_WRN("Can not fetch file length\n");
+    }
+	return bytes;
+}
 
 static void ftp_ctrl_callback(const uint8_t *msg, uint16_t len)
 {
@@ -40,7 +49,8 @@ static void ftp_ctrl_callback(const uint8_t *msg, uint16_t len)
 	strncpy(code_str, msg, sizeof(code_str) - 1);
 	code_str[sizeof(code_str) - 1] = '\0';
 	code = atoi(code_str);
-	if (FTP_PROPRIETARY(code)) {
+	if (FTP_PROPRIETARY(code)) 
+	{
 		switch (code) {
 		case FTP_CODE_901:
 			LOG_WRN("Disconnected by remote server!\r\n");
@@ -61,15 +71,17 @@ static void ftp_ctrl_callback(const uint8_t *msg, uint16_t len)
 			LOG_WRN("Unexpected error!\r\n");
 			break;
 		}
-		// if (ftp_data_mode_handler && exit_datamode_handler(-EAGAIN)) {
-		// 	ftp_data_mode_handler = NULL;
-		// }
+	
 		return;
 	}
-
-	// if (ftp_verbose_on) {
-	// 	data_send((uint8_t *)msg, len);
-	// }
+	else if(FTP_PRELIMINARY_POS(code))
+	{
+		if(code == FTP_CODE_150)
+		{
+			file_length = fetch_file_length(msg);
+			// LOG_INF("File status okay; about to open data connection\r\n");
+		}	
+	}
 }
 
 
@@ -111,15 +123,7 @@ static int do_ftp_status(void)
 	return (ret == FTP_CODE_211) ? 0 : -1;
 }
 
-
-static int do_ftp_close(void)
-{
-	int ret = ftp_close();
-
-	return (ret == FTP_CODE_221) ? 0 : -1;
-}
-
-
+#if 0
 static int do_ftp_ls(char *filepath)
 {
     int ret;
@@ -136,11 +140,30 @@ static int do_ftp_ls(char *filepath)
 }
 
 
+static int do_ftp_cd(char *dirpath)
+{
+	int ret;
+
+	ret = ftp_cwd(dirpath);
+	return (ret == FTP_CODE_250) ? 0 : -1;
+}
+#endif
+
+
+static int do_ftp_close(void)
+{
+	int ret = ftp_close();
+
+	return (ret == FTP_CODE_221) ? 0 : -1;
+}
+
 
 static int download_image_file(struct ftp_server_t *server)
 {
     int ret;
 	char *file_name = "zephyr.signed.bin";
+	// char *file_path = "home";
+
     // char *file_name = strrchr(server->hostname, '/');
     // if (file_name == NULL) 
     // {
@@ -163,10 +186,17 @@ static int download_image_file(struct ftp_server_t *server)
 		return ret;
 	}
 
-	// ret = do_ftp_ls(NULL);
+	// ret = do_ftp_ls(file_name);
 	// if (ret)		
 	// {
 	// 	LOG_ERR("Failed to get FTP status\n");		
+	// 	return ret;
+	// }
+
+	// ret = do_ftp_cd(file_path);
+	// if (ret)		
+	// {
+	// 	LOG_ERR("Failed to change directory path!\n");		
 	// 	return ret;
 	// }
 
@@ -229,21 +259,83 @@ void apply_state(enum fota_state new_state)
 static int start_dfu_process(void)
 {
 	int err = 0;
-	// err = boot_erase_img_bank(IMAGE1_ID);
-	// if(err)
-	// {
-	// 	LOG_ERR("erase Secondary slot failed!");
-	// 	return err;
-	// }
+
+	file_length = 0;
+	total_length = 0;
+	download_finished = false;
+	memset(&server, 0, sizeof(server));
+	memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
+	server.port = CONFIG_FTP_DOWNLOAD_PORT;
+	memcpy(server.username, CONFIG_FTP_DOWNLOAD_USER, strlen(CONFIG_FTP_DOWNLOAD_USER));
+	memcpy(server.password, CONFIG_FTP_DOWNLOAD_PASSWORD, strlen(CONFIG_FTP_DOWNLOAD_PASSWORD));
 
 	err = dfu_flash_start(0);
 	if(err)
 	{
-		LOG_ERR("Failed to dfu_start, errno %d", err);
+		LOG_ERR("Failed to init flash: %d", err);
+		return err;
 	}
+
+	err = download_image_file(&server);
+	if (err != FTP_CODE_226) {
+		LOG_INF("Download failed, err %d\n", err);
+	}
+	else
+	{
+		LOG_INF("FTP received_length=%d	file_length=%d\n", total_length, file_length);
+		if(file_length == total_length)
+		{
+			// apply_state(UPDATE_PENDING);
+			download_finished = true;
+			LOG_INF("Download completed!\n");
+		}
+		else
+		{
+			// apply_state(UPDATE_DOWNLOAD);
+			LOG_INF("File is corrupted, drop it!\n");
+		}
+	}
+	
+	err = do_ftp_close();
 
 	return err;
 }
+
+// static void start_download_image(void)
+// {
+// 	total_length = 0;
+// 	download_finished = false;
+// 	start_dfu_process();		//test by Noy
+	
+// 	memset(&server, 0, sizeof(server));
+// 	memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
+// 	server.port = CONFIG_FTP_DOWNLOAD_PORT;
+// 	memcpy(server.username, CONFIG_FTP_DOWNLOAD_USER, strlen(CONFIG_FTP_DOWNLOAD_USER));
+// 	memcpy(server.password, CONFIG_FTP_DOWNLOAD_PASSWORD, strlen(CONFIG_FTP_DOWNLOAD_PASSWORD));
+
+// 	err = download_image_file(&server);
+// 	if (err != FTP_CODE_226) {
+// 		LOG_INF("Download failed, err %d\n", err);
+// 		// apply_state(CONNECTED);
+// 		apply_state(IDLE);
+// 	}
+// 	else
+// 	{
+// 		if(file_length == total_length)
+// 		{
+// 			// apply_state(UPDATE_PENDING);
+// 			download_finished = true;
+// 			LOG_INF("Download completed!\n");
+// 		}
+// 		else
+// 		{
+// 			// apply_state(UPDATE_DOWNLOAD);
+// 			LOG_INF("File is corrupted, drop it!\n");
+// 		}
+// 	}
+	
+// 	ftp_uninit();
+// }
 
 
 static void fota_work_cb(struct k_work *work)
@@ -254,27 +346,7 @@ static void fota_work_cb(struct k_work *work)
 
 	switch (state) {
 	case UPDATE_DOWNLOAD:
-		total_length = 0;
-		// start_dfu_process();		//test by Noy
-		ftp_uninit();
-
-		memset(&server, 0, sizeof(server));
-		memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
-		server.port = CONFIG_FTP_DOWNLOAD_PORT;
-		memcpy(server.username, CONFIG_FTP_DOWNLOAD_USER, strlen(CONFIG_FTP_DOWNLOAD_USER));
-		memcpy(server.password, CONFIG_FTP_DOWNLOAD_PASSWORD, strlen(CONFIG_FTP_DOWNLOAD_PASSWORD));
-
-		err = download_image_file(&server);
-		if (err) {
-			printk("Download failed, err %d\n", err);
-			// apply_state(CONNECTED);
-			// do_ftp_close();
-			apply_state(IDLE);
-		}
-		else
-		{
-			printk("Downloadcompleted!\n");
-		}
+		err = start_dfu_process();
 		break;
 	case UPDATE_APPLY:
         // err = fota_image_apply();
@@ -286,16 +358,17 @@ static void fota_work_cb(struct k_work *work)
 }
 
 
-
-
 static void ftp_data_save(uint8_t *data, uint16_t length)
 {
 	// LOG_HEXDUMP_INF(data, length, "FTP received:");
-	
 
 	total_length += length;
-	LOG_INF("FTP total_length = %d\n", total_length);
-
+	if(length < 708)
+	{
+		LOG_INF("FTP received_data=%d	total_length=%d\n", length, total_length);
+	}
+	// LOG_INF("FTP total_length = %d\n", total_length);
+	
 	// int rc = 0;
 	// if(!download_finished)
 	// {
@@ -320,24 +393,11 @@ static void ftp_data_save(uint8_t *data, uint16_t length)
 static void ftp_data_callback(const uint8_t *msg, uint16_t len)
 {
 	ftp_data_save((uint8_t *)msg, len);
-
-//    const struct download_client_evt evt = {
-// 	   .id = DOWNLOAD_CLIENT_EVT_FRAGMENT,
-// 	   .fragment = {
-// 		   .buf = msg,
-// 		   .len = len,
-// 	   }
-//    };
-
-//    fota_download_external_evt_handler(&evt);
 }
 
 
 void ftp_client_init(void)
 {
-    // ftp_verbose_on = true;
-	// ftp_data_mode_handler = NULL;
-
 	ftp_init(ftp_ctrl_callback, ftp_data_callback);
 
     k_work_init(&fota_work, fota_work_cb);
