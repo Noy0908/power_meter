@@ -233,6 +233,11 @@ void handle_uart_data(uint8_t *buffer, uint16_t length)
 		apply_state(CONNECTED);
 		// LOG_ERR("Received data is not correct, drop it!\n");
 	}
+	else if(strstr(buffer, "reboot"))
+	{
+		apply_state(UPDATE_APPLY);
+		// LOG_ERR("Received data is not correct, drop it!\n");
+	}
 }
 
 

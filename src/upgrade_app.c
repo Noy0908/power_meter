@@ -23,7 +23,7 @@ static struct k_work fota_work;
 
 static enum fota_state state = IDLE;
 
-bool download_finished = false;
+
 
 static uint32_t file_length = 0;	//fetch length of file
 static uint32_t total_length = 0;	//received total length of file
@@ -262,7 +262,7 @@ static int start_dfu_process(void)
 
 	file_length = 0;
 	total_length = 0;
-	download_finished = false;
+
 	memset(&server, 0, sizeof(server));
 	memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
 	server.port = CONFIG_FTP_DOWNLOAD_PORT;
@@ -285,9 +285,8 @@ static int start_dfu_process(void)
 		LOG_INF("FTP received_length=%d	file_length=%d\n", total_length, file_length);
 		if(file_length == total_length)
 		{
-			// apply_state(UPDATE_PENDING);
-			download_finished = true;
 			LOG_INF("Download completed!\n");
+			apply_state(UPDATE_APPLY);
 		}
 		else
 		{
@@ -301,41 +300,6 @@ static int start_dfu_process(void)
 	return err;
 }
 
-// static void start_download_image(void)
-// {
-// 	total_length = 0;
-// 	download_finished = false;
-// 	start_dfu_process();		//test by Noy
-	
-// 	memset(&server, 0, sizeof(server));
-// 	memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
-// 	server.port = CONFIG_FTP_DOWNLOAD_PORT;
-// 	memcpy(server.username, CONFIG_FTP_DOWNLOAD_USER, strlen(CONFIG_FTP_DOWNLOAD_USER));
-// 	memcpy(server.password, CONFIG_FTP_DOWNLOAD_PASSWORD, strlen(CONFIG_FTP_DOWNLOAD_PASSWORD));
-
-// 	err = download_image_file(&server);
-// 	if (err != FTP_CODE_226) {
-// 		LOG_INF("Download failed, err %d\n", err);
-// 		// apply_state(CONNECTED);
-// 		apply_state(IDLE);
-// 	}
-// 	else
-// 	{
-// 		if(file_length == total_length)
-// 		{
-// 			// apply_state(UPDATE_PENDING);
-// 			download_finished = true;
-// 			LOG_INF("Download completed!\n");
-// 		}
-// 		else
-// 		{
-// 			// apply_state(UPDATE_DOWNLOAD);
-// 			LOG_INF("File is corrupted, drop it!\n");
-// 		}
-// 	}
-	
-// 	ftp_uninit();
-// }
 
 
 static void fota_work_cb(struct k_work *work)
@@ -369,25 +333,26 @@ static void ftp_data_save(uint8_t *data, uint16_t length)
 	}
 	// LOG_INF("FTP total_length = %d\n", total_length);
 	
-	// int rc = 0;
-	// if(!download_finished)
-	// {
-	// 	rc = dfu_data_store(data, length, false);
-	// 	if(rc != 0)
-	// 	{
-	// 		LOG_ERR("flash img write fail");
-	// 	}
-	// }
-	// else
-	// {
-	// 	rc = dfu_data_store(data, length, true);
-	// 	if(rc != 0)
-	// 	{
-	// 		LOG_INF("flash img write fail");
-	// 	}
+	int rc = 0;
 
-	// 	dfu_flash_finish();
-	// }
+	if(total_length < file_length)
+	{
+		rc = dfu_data_store(data, length, false);
+		if(rc != 0)
+		{
+			LOG_ERR("flash img write fail");
+		}
+	}
+	else
+	{
+		rc = dfu_data_store(data, length, true);
+		if(rc != 0)
+		{
+			LOG_INF("flash img write fail");
+		}
+
+		dfu_flash_finish();
+	}
 }
 
 static void ftp_data_callback(const uint8_t *msg, uint16_t len)
