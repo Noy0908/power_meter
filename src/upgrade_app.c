@@ -161,7 +161,8 @@ static int do_ftp_close(void)
 static int download_image_file(struct ftp_server_t *server)
 {
     int ret;
-	char *file_name = "zephyr.signed.bin";
+	// char *file_name = "zephyr.signed.bin";
+	char *file_name = "signed_patch.bin";
 	// char *file_path = "home";
 
     // char *file_name = strrchr(server->hostname, '/');

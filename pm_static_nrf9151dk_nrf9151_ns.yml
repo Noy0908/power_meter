@@ -1,3 +1,11 @@
+EMPTY_0:
+  address: 0xc000
+  end_address: 0x10000
+  placement:
+    before:
+    - mcuboot_pad
+  region: flash_primary
+  size: 0x4000
 app:
   address: 0x18000
   end_address: 0xb0000
@@ -5,12 +13,12 @@ app:
   size: 0x98000
 mcuboot:
   address: 0x0
-  end_address: 0x10000
+  end_address: 0xc000
   placement:
     before:
     - mcuboot_primary
   region: flash_primary
-  size: 0x10000
+  size: 0xc000
 mcuboot_pad:
   address: 0x10000
   end_address: 0x10200

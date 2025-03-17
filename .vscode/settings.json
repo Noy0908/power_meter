@@ -1,6 +1,7 @@
 {
     "iis.configDir": "",
     "files.associations": {
-        "string_view": "c"
+        "string_view": "c",
+        "kernel.h": "c"
     }
 }
