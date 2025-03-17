@@ -14,7 +14,7 @@ typedef struct {
 } socket_data_t;
 
 
-extern const k_tid_t tcp_thread; 
+extern const k_tid_t tcp_client_tid; 
 
 extern struct k_sem lte_connected_sem;
 

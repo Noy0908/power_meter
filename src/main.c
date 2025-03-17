@@ -178,7 +178,7 @@ int main(void)
 		if( 0 == k_sem_take(&modem_shutdown_sem, K_SECONDS(2)))
 		{
 			/** we should suspend the tcp thread */
-			// k_thread_suspend(tcp_thread);
+			// k_thread_suspend(tcp_client_tid);
 
 			err = nrf_modem_lib_shutdown();
 			if (err) {

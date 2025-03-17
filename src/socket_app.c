@@ -23,6 +23,9 @@ LOG_MODULE_REGISTER(tcp_sample, CONFIG_TCP_LOG_LEVEL);
 #define TCP_THREAD_STACK_SIZE               4096
 #define TCP_THREAD_PRIORITY 				5
 
+#define SERVER_PORT 						12345
+#define LISTEN_COUNT 						5
+
 #define TX_QUEUE_COUNT						20
 
 
@@ -60,7 +63,7 @@ static void receive_data_handle(uint8_t *data, uint16_t length)
 
 
 /* tcp client task */
-static void tcp_thread_fn(void)
+static void tcp_client_thread(void)
 {
 	int ret = 0;
 	struct pollfd fds[2];
@@ -200,8 +203,78 @@ error_exit:
 }
 
 
+void handle_client_request(int client_sock, char *recv_buffer, int len) {
+	if (strncmp(recv_buffer, "read power", strlen("read power")) == 0) {
+		char *response = "power: 100W";
+		send(client_sock, response, strlen(response), 0);
+	} else {
+		char *response = "error: unknown command";
+		send(client_sock, response, strlen(response), 0);
+	}
+	// close(client_sock);
+}
 
-/** TCP thread used to transparent transport data between tcp server and uart */
-// K_THREAD_DEFINE(tcp_thread, TCP_THREAD_STACK_SIZE,
-// 		tcp_thread_fn, NULL, NULL, NULL,
-// 		TCP_THREAD_PRIORITY, 0, 0);
+
+static void tcp_server_thread(void *arg1, void *arg2, void *arg3) {
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    int server_sock, client_sock;
+    struct sockaddr_in addr, client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    char recv_buffer[256];
+
+    server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (server_sock < 0) {
+        LOG_ERR("Failed to create server socket");
+        return;
+    }
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(SERVER_PORT);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(server_sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        LOG_ERR("Bind failed");
+        close(server_sock);
+        return;
+    }
+
+    if (listen(server_sock, LISTEN_COUNT) < 0) {
+        LOG_ERR("Listen failed");
+        close(server_sock);
+        return;
+    }
+
+    LOG_INF("TCP Server listening on port %d", SERVER_PORT);
+
+    while (1) {
+        client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_addr_len);
+        if (client_sock < 0) {
+            LOG_ERR("Accept failed");
+            continue;
+        }
+
+        LOG_INF("Client connected");
+        int len = recv(client_sock, recv_buffer, sizeof(recv_buffer) - 1, 0);
+        if (len > 0) {
+            recv_buffer[len] = '\0';
+            LOG_INF("Received: %s", recv_buffer);
+
+			handle_client_request(client_sock, recv_buffer, len);
+        }
+        // close(client_sock);
+    }
+}
+
+
+/** TCP client thread used to transparent transport data between tcp server and uart */
+K_THREAD_DEFINE(tcp_client_tid, TCP_THREAD_STACK_SIZE,
+		tcp_client_thread, NULL, NULL, NULL,
+		TCP_THREAD_PRIORITY, 0, 0);
+
+
+K_THREAD_DEFINE(tcp_server_tid, TCP_THREAD_STACK_SIZE, 
+		tcp_server_thread, NULL, NULL, NULL, 
+		TCP_THREAD_PRIORITY, 0, 0);
