@@ -7,6 +7,7 @@
 #ifndef __UPGRADE_APP_H_
 #define __UPGRADE_APP_H_
 
+#include "dfu_lib/nrf_dfu_flash.h"
 
 #define INVALID_SOCKET       -1
 #define INVALID_SEC_TAG      -1
@@ -23,8 +24,8 @@
 
 enum fota_state { 
     IDLE, 
-    CONNECTED, 
-    UPDATE_DOWNLOAD, 
+    UPDATE_SERIAL,  //serial port update
+    UPDATE_DOWNLOAD,    //ftp download update
     UPDATE_PENDING, 
     UPDATE_APPLY 
 };
@@ -38,8 +39,19 @@ struct ftp_server_t {
 };
 
 
+struct image_t {
+    uint32_t file_length;	//fetch length of file
+    uint32_t total_length;	//received total length of file
+};
+
+
+extern struct image_t upgrade;	
+
 extern void apply_state(enum fota_state new_state);
 
+extern void image_data_save(uint8_t *data, uint16_t length);
+
+extern int fetch_file_length(const uint8_t *msg);
 
 extern void ftp_client_init(void);
 

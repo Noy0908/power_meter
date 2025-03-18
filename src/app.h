@@ -26,11 +26,14 @@ extern struct k_msgq rx_event_queue;
 
 extern bool reconnect;
 
+extern bool transfer_mode;	//transfer mode flag to indicate now uart will receive image data
+
 
 extern int uart_tx_write(const uint8_t *data, size_t len);
 
 extern void uart_send_data(uint8_t *buffer, uint16_t length);
 
+extern void create_tcp_server_thread(void);
 
 extern int uart_handler_init(void);
 

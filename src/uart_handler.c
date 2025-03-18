@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(uart_handler, CONFIG_TCP_LOG_LEVEL);
 #define UART_SLIP_MTU						512
 
 #define UART_SLAB_BLOCK_SIZE 				sizeof(struct rx_buf_t)
-#define UART_SLAB_BLOCK_COUNT 				3
+#define UART_SLAB_BLOCK_COUNT 				8
 
 
 const struct device *const uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
@@ -52,6 +52,8 @@ enum uart_recovery_state {
 };
 
 static atomic_t recovery_state;
+
+bool transfer_mode = false;	//transfer mode flag to indicate now uart will receive image data
 
 static uint8_t slip_buffer[UART_SLIP_MTU];
 static slip_t m_slip = {
@@ -228,9 +230,13 @@ void handle_uart_data(uint8_t *buffer, uint16_t length)
 		// apply_state(CONNECTED);
 		apply_state(UPDATE_DOWNLOAD);
 	}
-	else if(strstr(buffer, "connect"))
+	else if(strstr(buffer, "transfer"))
 	{
-		apply_state(CONNECTED);
+		// apply_state(UPDATE_SERIAL);
+		transfer_mode = true;
+		dfu_flash_start(0);
+		upgrade.total_length = 0;
+		upgrade.file_length = fetch_file_length(buffer);
 		// LOG_ERR("Received data is not correct, drop it!\n");
 	}
 	else if(strstr(buffer, "reboot"))
@@ -250,31 +256,45 @@ static void rx_process(struct k_work *work)
 
 	while (k_msgq_get(&rx_event_queue, &rx_event, K_NO_WAIT) == 0) 
 	{
-		for(i=0; i<rx_event.len; i++)
+		/**if we don't use slip protocol, we should use the customized protocol to resolve the received data,
+		but current we use the raw data to test aurt upgrade, so we don't need to resolve the received data */
+		if(transfer_mode)
 		{
-			ret_code = slip_decode_add_byte(&m_slip, rx_event.buf[i]);
-			switch (ret_code)
+			image_data_save(rx_event.buf, rx_event.len);
+			if(upgrade.file_length == upgrade.total_length)
 			{
-			case NRF_SUCCESS:
-				/** decode uart data success, now put it to message queue */
-				// on_packet_received(m_slip.p_buffer, m_slip.current_index);
-				LOG_INF("Uart received:[%d]:%s\n",m_slip.current_index, m_slip.p_buffer);
-				handle_uart_data(m_slip.p_buffer, m_slip.current_index);		//handle the received data
-				
-				memset(m_slip.p_buffer, 0, m_slip.buffer_len);
-				m_slip.current_index = 0;
-        		m_slip.state = SLIP_STATE_DECODING;
-				break;
-			// fall through
-			case ERROR_NO_MEM:
-				m_slip.current_index = 0;
-				m_slip.state = SLIP_STATE_DECODING;
-				break;
-			default:
-				break;
+				LOG_INF("Download completed!\n");
+				apply_state(UPDATE_APPLY);
 			}
 		}
-
+		else
+		{
+			//if we use slip protocol, we should decode the received data
+			for(i=0; i<rx_event.len; i++)
+			{
+				ret_code = slip_decode_add_byte(&m_slip, rx_event.buf[i]);
+				switch (ret_code)
+				{
+				case NRF_SUCCESS:
+					/** decode uart data success, now put it to message queue */
+					// on_packet_received(m_slip.p_buffer, m_slip.current_index);
+					LOG_INF("Uart received:[%d]:%s\n",m_slip.current_index, m_slip.p_buffer);
+					handle_uart_data(m_slip.p_buffer, m_slip.current_index);		//handle the received data
+					
+					memset(m_slip.p_buffer, 0, m_slip.buffer_len);
+					m_slip.current_index = 0;
+					m_slip.state = SLIP_STATE_DECODING;
+					break;
+				// fall through
+				case ERROR_NO_MEM:
+					m_slip.current_index = 0;
+					m_slip.state = SLIP_STATE_DECODING;
+					break;
+				default:
+					break;
+				}
+			}
+		}
 		rx_buf_unref(rx_event.buf);
 	}
 

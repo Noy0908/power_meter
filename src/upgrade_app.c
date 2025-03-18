@@ -14,7 +14,7 @@
 LOG_MODULE_DECLARE(tcp_sample,CONFIG_TCP_LOG_LEVEL);
 
 #include "upgrade_app.h"
-#include "dfu_lib/nrf_dfu_flash.h"
+// #include "dfu_lib/nrf_dfu_flash.h"
 
 
 struct ftp_server_t server;
@@ -25,11 +25,12 @@ static enum fota_state state = IDLE;
 
 
 
-static uint32_t file_length = 0;	//fetch length of file
-static uint32_t total_length = 0;	//received total length of file
+// uint32_t file_length = 0;	//fetch length of file
+// static uint32_t total_length = 0;	//received total length of file
+struct image_t upgrade = {0};
 
 
-static int fetch_file_length(const uint8_t *msg)
+int fetch_file_length(const uint8_t *msg)
 {
     int bytes;
     
@@ -78,7 +79,7 @@ static void ftp_ctrl_callback(const uint8_t *msg, uint16_t len)
 	{
 		if(code == FTP_CODE_150)
 		{
-			file_length = fetch_file_length(msg);
+			upgrade.file_length = fetch_file_length(msg);
 			// LOG_INF("File status okay; about to open data connection\r\n");
 		}	
 	}
@@ -228,17 +229,17 @@ void apply_state(enum fota_state new_state)
 	switch (new_state) {
 	case IDLE:
 		break;
-	case CONNECTED:
-		do_ftp_close();
-        state = UPDATE_DOWNLOAD;
-		LOG_INF("Now enter 'download' to download new application firmware\n");
+	case UPDATE_SERIAL:
+		//	LOG_INF("Now enter 'transfer' to transfer new application firmware\n");
+        k_work_submit(&fota_work);
+		LOG_INF("Now enter 'transparent mode' to receive new application firmware through uart!\n");
 		break;
 	case UPDATE_DOWNLOAD:
 		k_work_submit(&fota_work);
 		LOG_INF("Now start to download new application firmware\n");
 		break;
 	case UPDATE_PENDING:
-		if(total_length >= 0)
+		if(upgrade.total_length >= 0)
 		{
 			 // state = UPDATE_APPLY;
 			LOG_INF("file download succsee, now enter mcuboot!\n");
@@ -261,8 +262,8 @@ static int start_dfu_process(void)
 {
 	int err = 0;
 
-	file_length = 0;
-	total_length = 0;
+	upgrade.file_length = 0;
+	upgrade.total_length = 0;
 
 	memset(&server, 0, sizeof(server));
 	memcpy(server.hostname, CONFIG_FTP_DOWNLOAD_HOST, strlen(CONFIG_FTP_DOWNLOAD_HOST));
@@ -283,8 +284,8 @@ static int start_dfu_process(void)
 	}
 	else
 	{
-		LOG_INF("FTP received_length=%d	file_length=%d\n", total_length, file_length);
-		if(file_length == total_length)
+		LOG_INF("FTP received_length=%d	file_length=%d\n", upgrade.total_length, upgrade.file_length);
+		if(upgrade.file_length == upgrade.total_length)
 		{
 			LOG_INF("Download completed!\n");
 			apply_state(UPDATE_APPLY);
@@ -323,20 +324,20 @@ static void fota_work_cb(struct k_work *work)
 }
 
 
-static void ftp_data_save(uint8_t *data, uint16_t length)
+void image_data_save(uint8_t *data, uint16_t length)
 {
 	// LOG_HEXDUMP_INF(data, length, "FTP received:");
 
-	total_length += length;
+	upgrade.total_length += length;
 	if(length < 708)
 	{
-		LOG_INF("FTP received_data=%d	total_length=%d\n", length, total_length);
+		LOG_INF("FTP received_data=%d	total_length=%d\n", length, upgrade.total_length);
 	}
 	// LOG_INF("FTP total_length = %d\n", total_length);
 	
 	int rc = 0;
 
-	if(total_length < file_length)
+	if(upgrade.total_length < upgrade.file_length)
 	{
 		rc = dfu_data_store(data, length, false);
 		if(rc != 0)
@@ -358,7 +359,7 @@ static void ftp_data_save(uint8_t *data, uint16_t length)
 
 static void ftp_data_callback(const uint8_t *msg, uint16_t len)
 {
-	ftp_data_save((uint8_t *)msg, len);
+	image_data_save((uint8_t *)msg, len);
 }
 
 

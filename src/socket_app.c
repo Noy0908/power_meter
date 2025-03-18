@@ -28,6 +28,10 @@ LOG_MODULE_REGISTER(tcp_sample, CONFIG_TCP_LOG_LEVEL);
 
 #define TX_QUEUE_COUNT						20
 
+static k_tid_t tcp_server_tid;
+static struct k_thread tcp_server;
+static K_THREAD_STACK_DEFINE(tcp_server_thread_stack, TCP_THREAD_STACK_SIZE);
+
 
 K_MSGQ_DEFINE(tx_send_queue, sizeof(socket_data_t), TX_QUEUE_COUNT, 4);
 
@@ -71,6 +75,8 @@ static void tcp_client_thread(void)
 	uint8_t rec_buf[512] = {0};  /* For socket receive data. */
 	
 	k_sem_take(&lte_connected_sem, K_FOREVER);
+
+	create_tcp_server_thread();
 
 retry:
 	LOG_WRN("LTE connected successfully, now we start tcp task!!!\n");
@@ -268,13 +274,26 @@ static void tcp_server_thread(void *arg1, void *arg2, void *arg3) {
     }
 }
 
+void create_tcp_server_thread(void) {
+	tcp_server_tid = k_thread_create(&tcp_server, tcp_server_thread_stack, 
+		TCP_THREAD_STACK_SIZE, tcp_server_thread, NULL, NULL, NULL, 
+		TCP_THREAD_PRIORITY, 0, K_NO_WAIT);
+	k_thread_name_set(tcp_server_tid, "tcp_server");
+}
+
+
+void kill_tcp_server_thread(void) {
+	k_thread_abort(tcp_server_tid);
+}
+
+
 
 /** TCP client thread used to transparent transport data between tcp server and uart */
-K_THREAD_DEFINE(tcp_client_tid, TCP_THREAD_STACK_SIZE,
-		tcp_client_thread, NULL, NULL, NULL,
-		TCP_THREAD_PRIORITY, 0, 0);
+// K_THREAD_DEFINE(tcp_client_tid, TCP_THREAD_STACK_SIZE,
+// 		tcp_client_thread, NULL, NULL, NULL,
+// 		TCP_THREAD_PRIORITY, 0, 0);
 
-
-K_THREAD_DEFINE(tcp_server_tid, TCP_THREAD_STACK_SIZE, 
-		tcp_server_thread, NULL, NULL, NULL, 
-		TCP_THREAD_PRIORITY, 0, 0);
+/** TCP server will be create from the tcp client thread */
+// K_THREAD_DEFINE(tcp_server_tid, TCP_THREAD_STACK_SIZE, 
+// 		tcp_server_thread, NULL, NULL, NULL, 
+// 		TCP_THREAD_PRIORITY, 0, 0);
