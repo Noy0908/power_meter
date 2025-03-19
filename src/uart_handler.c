@@ -223,6 +223,8 @@ void uart_send_data(uint8_t *buffer, uint16_t length)
 }
 
 
+
+
 void handle_uart_data(uint8_t *buffer, uint16_t length)
 {
 	if(strstr(buffer, "download"))
@@ -261,6 +263,7 @@ static void rx_process(struct k_work *work)
 		if(transfer_mode)
 		{
 			image_data_save(rx_event.buf, rx_event.len);
+
 			if(upgrade.file_length == upgrade.total_length)
 			{
 				LOG_INF("Download completed!\n");

@@ -15,7 +15,7 @@
 #include "app.h"
 #include "upgrade_app.h"
 
-#define FW_VERSION			"1.1.0"
+#define FW_VERSION			"1.0.0"
 
 
 K_SEM_DEFINE(lte_connected_sem, 0, 1);

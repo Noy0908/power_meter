@@ -331,11 +331,12 @@ void image_data_save(uint8_t *data, uint16_t length)
 	upgrade.total_length += length;
 	if(length < 708)
 	{
-		LOG_INF("FTP received_data=%d	total_length=%d\n", length, upgrade.total_length);
+		LOG_INF("Received image: data_length=%d	total_length=%d\n", length, upgrade.total_length);
 	}
 	// LOG_INF("FTP total_length = %d\n", total_length);
 	
 	int rc = 0;
+
 
 	if(upgrade.total_length < upgrade.file_length)
 	{
@@ -347,13 +348,16 @@ void image_data_save(uint8_t *data, uint16_t length)
 	}
 	else
 	{
-		rc = dfu_data_store(data, length, true);
-		if(rc != 0)
+		if(upgrade.file_length > 1024)
 		{
-			LOG_INF("flash img write fail");
-		}
+			rc = dfu_data_store(data, length, true);
+			if(rc != 0)
+			{
+				LOG_INF("flash img write fail");
+			}
 
-		dfu_flash_finish();
+			dfu_flash_finish();
+		}
 	}
 }
 
