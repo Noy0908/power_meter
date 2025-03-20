@@ -83,7 +83,6 @@ retry:
 
 #if !defined(USE_IPV6)
 	struct sockaddr_in server_addr = {0};
-	// static struct hostent *server_hs;
 
 	client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (client_socket < 0) {
@@ -99,17 +98,26 @@ retry:
 		goto error_exit;
 	}
 
-	
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(CONFIG_TCP_SERVER_PORT);
 	inet_pton(AF_INET, CONFIG_TCP_SERVER_ADDRESS_STATIC,&server_addr.sin_addr);
-	//if we use the domain name, we should use the gethostbyname() to get the server address
-	// server_hs = gethostbyname(CONFIG_TCP_SERVER_ADDRESS_STATIC);
-	// if (server_hs == NULL) {
-	// 	LOG_ERR("gethostbyname() failed: %d", -errno);
+	//if we use the domain name, we should use the getaddrinfo() to get the server address
+	// struct addrinfo *result;
+	// struct addrinfo hints = {
+	// 	.ai_family = AF_INET,
+	// };
+	// char ipv4_addr[NET_IPV4_ADDR_LEN];
+	// ret = getaddrinfo(CONFIG_TCP_SERVER_ADDRESS_STATIC, NULL, &hints, &result);
+	// if (ret) {
+	// 	LOG_ERR("getaddrinfo, error: %d", ret);
 	// 	goto error_exit;
 	// }
-	// server_addr.sin_addr = *((struct in_addr *)server_hs->h_addr);
+	// server_addr.sin_addr.s_addr = ((struct sockaddr_in *)result->ai_addr)->sin_addr.s_addr;
+
+	// inet_ntop(AF_INET, &server_addr.sin_addr.s_addr, ipv4_addr, sizeof(ipv4_addr));
+	// LOG_INF("IPv4 Address found %s", ipv4_addr);
+	// /* Free the address. */
+	// freeaddrinfo(result);
 
 	ret = connect(client_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr_in));
 	if (ret) {
