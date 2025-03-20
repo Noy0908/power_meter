@@ -83,10 +83,11 @@ retry:
 
 #if !defined(USE_IPV6)
 	struct sockaddr_in server_addr = {0};
+	// static struct hostent *server_hs;
 
 	client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (client_socket < 0) {
-		printf("error: socket(AF_INET): %d\n", errno);
+		LOG_ERR("error: socket(AF_INET): %d\n", errno);
 		goto error_exit;
 	}
 	struct timeval socket_timeout = {.tv_sec = 3};
@@ -102,6 +103,13 @@ retry:
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(CONFIG_TCP_SERVER_PORT);
 	inet_pton(AF_INET, CONFIG_TCP_SERVER_ADDRESS_STATIC,&server_addr.sin_addr);
+	//if we use the domain name, we should use the gethostbyname() to get the server address
+	// server_hs = gethostbyname(CONFIG_TCP_SERVER_ADDRESS_STATIC);
+	// if (server_hs == NULL) {
+	// 	LOG_ERR("gethostbyname() failed: %d", -errno);
+	// 	goto error_exit;
+	// }
+	// server_addr.sin_addr = *((struct in_addr *)server_hs->h_addr);
 
 	ret = connect(client_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr_in));
 	if (ret) {
@@ -289,9 +297,9 @@ void kill_tcp_server_thread(void) {
 
 
 /** TCP client thread used to transparent transport data between tcp server and uart */
-// K_THREAD_DEFINE(tcp_client_tid, TCP_THREAD_STACK_SIZE,
-// 		tcp_client_thread, NULL, NULL, NULL,
-// 		TCP_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(tcp_client_tid, TCP_THREAD_STACK_SIZE,
+		tcp_client_thread, NULL, NULL, NULL,
+		TCP_THREAD_PRIORITY, 0, 0);
 
 /** TCP server will be create from the tcp client thread */
 // K_THREAD_DEFINE(tcp_server_tid, TCP_THREAD_STACK_SIZE, 

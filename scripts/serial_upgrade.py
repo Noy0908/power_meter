@@ -2,17 +2,17 @@ import serial
 import time
 import sys
 
-END = b'\xC0'  # SLIP 结束标志
-ESC = b'\xDB'  # SLIP 转义字符
-ESC_END = b'\xDC'  # 替代 0xC0
-ESC_ESC = b'\xDD'  # 替代 0xDB
+END = b'\xC0'  # SLIP end character
+ESC = b'\xDB'  # SLIP escape Characters
+ESC_END = b'\xDC'  # replace END with this character
+ESC_ESC = b'\xDD'  # replace ESC with this character
 
 PACKET_SIZE = 512  # 每包数据长度
 
 
 def slip_encode(packet: bytes) -> bytes:
     """
-    使用 SLIP 协议封装数据
+    use SLIP protocol to encode a packet
     """
     encoded = END
     for byte in packet:
@@ -28,30 +28,30 @@ def slip_encode(packet: bytes) -> bytes:
 
 def send_firmware(serial_port: str, baudrate: int, firmware_path: str):
     """
-    通过串口发送固件文件，等待设备返回 "Received image:" 继续下一包
+    send firmware to device via serial port, wait for device to confirm each packet before sending next packet.
     """
     try:
         ser = serial.Serial(serial_port, baudrate, timeout=5)
-        print(f"[INFO] 打开串口 {serial_port}，波特率 {baudrate}")
+        print(f"[INFO] open UART {serial_port}，baudrate {baudrate}")
         
         with open(firmware_path, "rb") as f:
             firmware_data = f.read()
         
         total_size = len(firmware_data)
-        print(f"[INFO] 读取固件文件 {firmware_path}，大小 {total_size} 字节")
+        print(f"[INFO] read image file {firmware_path}，file length is {total_size} bytes")
         
-        # 发送 SLIP 封装的 transfer 指令
+        # send "transfer(x bytes)" command with SLIP encoding
         transfer_command = f"transfer({total_size} bytes)".encode()
         ser.write(slip_encode(transfer_command))
         ser.flush()
-        print("[INFO] 发送 transfer 指令，等待设备确认...")
+        print("[INFO] send transfer command, wait for confirmation...")
         
         while True:
             response = ser.readline().decode(errors='ignore').strip()
             if response:
                 print(f"[DEVICE] {response}")
             if "Fetch file length:" in response:
-                print("[INFO] 设备请求文件长度，开始传输数据...")
+                print("[INFO] require file length, now start to transfer image data...")
                 break
         
         offset = 0
@@ -63,17 +63,17 @@ def send_firmware(serial_port: str, baudrate: int, firmware_path: str):
             chunk_size = len(chunk)
             # slip_data = slip_encode(chunk)
             
-            print(f"[INFO] 发送数据包 {packet_index} / {total_packets}, 大小 {chunk_size} 字节")
+            print(f"[INFO] send packet {packet_index} / {total_packets}, length is {chunk_size} bytes")
             ser.write(chunk)
             ser.flush()
             
-            # # 等待设备返回 "Received image:"
+            # # wait ack "Received image:"
             while True:
                 response = ser.readline().decode(errors='ignore').strip()
                 if response:
                     print(f"[DEVICE] {response}")
                 if "Received image:" in response:
-                    print("[INFO] 设备确认接收，发送下一包...")
+                    print("[INFO] device response ack, now send next packet...")
                     offset += chunk_size
                     packet_index += 1
                     break
@@ -82,29 +82,29 @@ def send_firmware(serial_port: str, baudrate: int, firmware_path: str):
             # # print(f"response: {response}")
             # # if response == b'Received image:':
             # if "Received image:" in response:
-            #     print("[INFO] 设备确认接收，发送下一包...")
+            #     print("[INFO] device response ack, now send next packet...")
             #     offset += PACKET_SIZE
             #     packet_index += 1
             # else:
-            #     print("[WARNING] 设备未正确响应，重试发送...")
+            #     print("[WARNING] Can not receive ack, now resend...")
             
-        print("[INFO] 固件发送完成！")
+        print("[INFO] firmware been sent finished！")
         # ser.close()
         while True:
             response = ser.readline().decode(errors='ignore').strip()
             if response:
                 print(f"[DEVICE] {response}")
     except serial.SerialException as e:
-        print(f"[ERROR] 串口错误: {e}")
+        print(f"[ERROR] uart error: {e}")
     except FileNotFoundError:
-        print(f"[ERROR] 固件文件未找到: {firmware_path}")
+        print(f"[ERROR] can not find file: {firmware_path}")
     except Exception as e:
-        print(f"[ERROR] 发生异常: {e}")
+        print(f"[ERROR] exception occurred: {e}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("用法: python serial_upgrade.py <串口号> <波特率> <固件文件路径>")
+        print("Usage: python serial_upgrade.py <COM_id> <baudrate> <file path>")
         sys.exit(1)
     
     port = sys.argv[1]

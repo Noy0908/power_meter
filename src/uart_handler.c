@@ -241,6 +241,17 @@ void handle_uart_data(uint8_t *buffer, uint16_t length)
 		upgrade.file_length = fetch_file_length(buffer);
 		// LOG_ERR("Received data is not correct, drop it!\n");
 	}
+	else if(strstr(buffer, "upload:"))
+	{
+		uint8_t len = 0;
+		char *msg = strstr((char *)buffer, "upload:");
+		if(msg != NULL)
+		{
+			msg += strlen("upload:");
+			len = length - strlen("upload:");
+			on_packet_received(msg, len);
+		}
+	}
 	else if(strstr(buffer, "reboot"))
 	{
 		apply_state(UPDATE_APPLY);
